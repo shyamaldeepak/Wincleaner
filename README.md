@@ -1,4 +1,3 @@
-# Wincleaner
 # WinCleaner
 
 > A fast Windows CLI for reclaiming disk space — junk cleaning, app uninstalling, and disk usage analysis, all from the terminal. The Windows answer to `mole`.
