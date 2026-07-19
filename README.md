@@ -90,7 +90,8 @@ command depends on.
 ## Project layout
 
 ```
-winclean.ps1              Entry router
+winclean.ps1              Entry router — see .NOTES in the file for a real
+                            PowerShell splatting gotcha it works around
 winclean.cmd               PATH shim so `winclean` works from cmd.exe too
 WinClean.psd1 / .psm1       Module manifest / root module
 Modules/Core/                Safety.ps1, Remove-Safely.ps1, Logging.ps1,
@@ -100,10 +101,22 @@ Modules/Analyze.ps1          Disk usage scan and interactive browser
 Modules/Clean.ps1            Known-safe cleanup catalog
 Modules/Uninstall.ps1        App inventory and removal
 Tests/                       Pester tests
+README.md                    This file
+SECURITY.md                  Threat model and the delete/protected-path contract
+CLAUDE.md                    Notes for future AI-agent work on this repo
 ```
 
 ## Status
 
-v0.1.0 — first working version of all four commands. Built and reviewed on
-macOS (no `pwsh` available in that environment to run Pester directly);
-needs a real smoke test on Windows 10/11 before being treated as verified.
+v0.1.0 — all four commands implemented and exercised for real: PowerShell 7
+was installed locally (this project was built on macOS) and used to run the
+full Pester suite (27 passing, 2 skipped — they need a real Windows Recycle
+Bin / registry, guarded by `-Skip:(-not $IsWindows)`) plus manual end-to-end
+CLI runs of every command. That process caught and fixed real bugs: a crash
+in the protected-path builder when a Windows env var is unset, a `Join-Path`
+gotcha with bare drive letters, an empty-string path hitting PowerShell's
+own parameter binder instead of the safety check, and a router bug where
+every flag after the first was silently mis-parsed (see `winclean.ps1`).
+Still needs one real pass on actual Windows 10/11 hardware before you trust
+it against real data — nothing here has run on a real Windows Recycle Bin,
+registry, or Appx store yet.
