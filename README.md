@@ -1,10 +1,45 @@
-# Win Clean
+# 🧹 Win Clean
+
+🧹 Clean, 🗑️ uninstall, 🔍 analyze, ⚡ optimize, and 📊 monitor your Windows
+PC — all from the terminal.
+
+![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-5391FE?logo=powershell&logoColor=white)
+![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D6?logo=windowsxp&logoColor=white)
+![License](https://img.shields.io/badge/license-Apache%202.0-blue)
+![Tests](https://img.shields.io/badge/tests-51%20passing%20%2F%203%20skipped-brightgreen)
+![Self-elevation](https://img.shields.io/badge/self--elevation-never-critical)
 
 A native PowerShell terminal CLI for Windows 10/11 storage analysis, cache
 cleanup, app uninstall, and RAM diagnostics. No WSL, no extra runtime —
 just PowerShell 5.1+ (ships with Windows) or PowerShell 7+.
 
-## Commands
+**Contents:** [What it looks like](#what-it-looks-like) ·
+[Commands](#commands) · [How it's built](#how-its-built) ·
+[Safety model](#safety-model) · [Install](#install) · [Tests](#tests) ·
+[Project layout](#project-layout) · [Status](#status)
+
+## What it looks like 🖥️
+
+<img src="assets/terminal-preview.svg" alt="winclean clean example output in a terminal window" width="100%">
+
+That image is a hand-kept SVG, not a screen recording — there's no live
+Windows box to capture a real one from (see [Status](#status): this
+project is built and tested on macOS). It's redrawn by hand whenever the
+real output format changes, rather than left to quietly drift like a
+stale screenshot would. Every real invocation also prints a small banner
+identifying the CLI, live — so this is genuinely representative, not a
+polished-up approximation.
+
+## Commands 🧰
+
+| Command | What it does |
+|---|---|
+| `winclean status` | CPU/RAM/disk snapshot, top processes by memory. `-Close <pid>` / `-Restart <pid>` act on one; `-TrimWorkingSets` is an explicit, never-implicit, marginal RAM trim. |
+| `winclean analyze` | Interactive disk browser, largest → smallest, drill-down + delete. `-Duplicates` finds exact-duplicate files by content hash (read-only). |
+| `winclean clean` | Preview known-safe rebuildable storage; `-Apply` actually cleans it. `-IncludeDisabled` also covers opt-in-only entries (Prefetch, emptying the Recycle Bin). |
+| `winclean uninstall` | List installed applications; `-Filter <text>` to search; `-Remove <index>` to uninstall one. |
+| `winclean startup` | Read-only inventory of what launches at logon (registry Run keys + Startup folders). |
+| `winclean history` | Read the JSON-lines operations log; `-Action`, `-Status`, `-Last <n>`, `-Json`. |
 
 ```
 winclean status                     CPU/RAM/disk snapshot, top processes by memory (high -> low)
@@ -34,31 +69,50 @@ winclean history -Last 20           Most recent 20 entries
 winclean history -Status rejected   Only entries Win Clean refused to act on
 ```
 
-### What it looks like in a terminal
+## How it's built 🏗️
 
-There's no recorded screen-capture GIF here — this preview is a plain text
-mockup of real output (`winclean clean` after a few days of browser use),
-kept in sync by hand rather than an image that can silently go stale.
-Every invocation also prints a small banner identifying the CLI, live, so
-this is genuinely what you'd see rather than a polished-up approximation:
+Every command is a thin layer over one shared Core: nothing outside
+`Modules/Core/` is allowed to touch the filesystem destructively.
 
-```
-  +-------------------------------------------+
-  |   Win Clean -- Windows storage & app CLI   |
-  +-------------------------------------------+
-
-Win Clean — clean preview (nothing deleted; pass -Apply to actually clean)
-
-     412.6 MB  User Temp                    212 items
-     128.9 MB  Internet Cache               1,304 items
-      31.2 MB  Error Reporting Queue        6 items
-     980.4 MB  Windows Update Download Cache 41 items  [needs admin — re-run elevated]
-       6.1 MB  Thumbnail Cache              2 items
-
-  Reclaimable now: 573.8 MB
+```mermaid
+flowchart TD
+    A["winclean.ps1<br/>entry router — no self-elevation"] --> B["WinClean.psm1<br/>root module"]
+    B --> C["Modules/Core/*.ps1<br/>loaded first, shared by every command"]
+    B --> D["Modules/*.ps1<br/>Status · Analyze · Clean · Uninstall · Startup · History"]
+    D -- "any command that deletes" --> E["Remove-WinCleanItem<br/>the ONLY function allowed to delete"]
+    E -- "gated by" --> F["Test-WinCleanPathSafeToDelete<br/>protected-root deny-list"]
+    C -.-> E
+    C -.-> F
 ```
 
-## Safety model
+`startup` and `history` never reach `Remove-WinCleanItem` at all — they're
+read-only by design (see [Safety model](#safety-model)). Emptying the
+Recycle Bin (`clean -IncludeDisabled -Apply`) is the one deliberate
+exception on the other side: it calls the built-in `Clear-RecycleBin`
+cmdlet directly, bypassing this gate entirely, because it takes no
+caller-supplied path for the gate to check — explained in full below.
+
+## Safety model 🛡️
+
+```mermaid
+flowchart LR
+    P["Path to delete<br/>(user-supplied or scan-derived)"] --> V1{"Absolute?<br/>No .. traversal?<br/>No control chars?"}
+    V1 -- reject --> X["Rejected + logged<br/>(operations.jsonl)"]
+    V1 -- ok --> R["Resolve reparse points<br/>to the real target"]
+    R --> V2{"Inside a protected root?<br/>(C:\Windows, Program Files,<br/>bare drive/home root, ...)"}
+    V2 -- yes --> X
+    V2 -- no --> M{"-Permanent<br/>switch?"}
+    M -- no --> RB["Move to Recycle Bin"]
+    M -- yes --> PD["Permanent delete"]
+    RB -- move fails --> FC["Fail CLOSED<br/>never falls back to a permanent delete"]
+    RB -- ok --> L["Logged: ok"]
+    PD --> L
+
+    style X fill:#3a1414,stroke:#f85149,color:#f8d7da
+    style FC fill:#3a1414,stroke:#f85149,color:#f8d7da
+    style L fill:#12261c,stroke:#3fb950,color:#c9f0d4
+    style RB fill:#12261c,stroke:#3fb950,color:#c9f0d4
+```
 
 Every delete goes through one function: `Remove-WinCleanItem`
 (`Modules/Core/Remove-Safely.ps1`). It:
@@ -109,7 +163,7 @@ entry is safe to disable, or which copy of a duplicate file is the one
 worth keeping, is exactly the kind of per-item judgment call this project
 doesn't automate — see `SECURITY.md` § Layer 5.
 
-## Install
+## Install 📦
 
 ```powershell
 .\install.ps1
@@ -125,7 +179,7 @@ To run without installing, from this folder:
 .\winclean.ps1 status
 ```
 
-## Tests
+## Tests ✅
 
 ```powershell
 Invoke-Pester .\Tests\
@@ -135,28 +189,35 @@ Invoke-Pester .\Tests\
 deny-list and the delete/Recycle-Bin contract — the two things every other
 command depends on.
 
-## Project layout
+## Project layout 🗂️
 
 ```
-winclean.ps1              Entry router — see .NOTES in the file for a real
-                            PowerShell splatting gotcha it works around
-winclean.cmd               PATH shim so `winclean` works from cmd.exe too
-WinClean.psd1 / .psm1       Module manifest / root module
-Modules/Core/                Safety.ps1, Remove-Safely.ps1, Logging.ps1,
-                              Elevation.ps1, Format.ps1 — shared by every command
-Modules/Status.ps1           RAM/CPU/disk snapshot, process actions
-Modules/Analyze.ps1          Disk usage scan, interactive browser, duplicate-file finder
-Modules/Clean.ps1            Known-safe cleanup catalog + opt-in Recycle Bin empty
-Modules/Uninstall.ps1        App inventory and removal
-Modules/Startup.ps1          Read-only startup-program inventory (Run keys + Startup folders)
-Modules/History.ps1          Read-only viewer for the operations log
-Tests/                       Pester tests
-README.md                    This file
-SECURITY.md                  Threat model and the delete/protected-path contract
-CLAUDE.md                    Notes for future AI-agent work on this repo
+WinClean/
+├── winclean.ps1                Entry router — see .NOTES in the file for a
+│                                real PowerShell splatting gotcha it works around
+├── winclean.cmd                 PATH shim so `winclean` works from cmd.exe too
+├── WinClean.psd1 / .psm1         Module manifest / root module
+├── Modules/
+│   ├── Core/                     loaded first — every command depends on this
+│   │   ├── Safety.ps1             Path validation + protected-root deny-list
+│   │   ├── Remove-Safely.ps1      The ONLY function allowed to delete anything
+│   │   ├── Logging.ps1            JSON-lines operations log
+│   │   ├── Elevation.ps1          Admin check — never self-elevates
+│   │   └── Format.ps1             Shared byte-size formatting
+│   ├── Status.ps1                 RAM/CPU/disk snapshot, process actions
+│   ├── Analyze.ps1                Disk usage scan, browser, duplicate-file finder
+│   ├── Clean.ps1                  Known-safe cleanup catalog + Recycle Bin empty
+│   ├── Uninstall.ps1              App inventory and removal
+│   ├── Startup.ps1                Read-only startup-program inventory
+│   └── History.ps1                Read-only operations-log viewer
+├── Tests/                        Pester tests, one file per module
+├── assets/                       README images (hand-kept SVGs, no external deps)
+├── README.md                     This file
+├── SECURITY.md                   Threat model and the delete/protected-path contract
+└── CLAUDE.md                     Notes for future AI-agent work on this repo
 ```
 
-## Status
+## Status 📈
 
 v0.1.0 — seven commands implemented and exercised for real: PowerShell 7
 was installed locally (this project was built on macOS) and used to run the

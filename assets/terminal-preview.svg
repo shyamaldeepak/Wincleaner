@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 400" width="800" height="400" font-family="SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace">
+  <title>winclean clean — example terminal output</title>
+  <defs>
+    <clipPath id="rounded">
+      <rect x="0" y="0" width="800" height="400" rx="10" ry="10"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#rounded)">
+    <rect x="0" y="0" width="800" height="400" fill="#0b1220"/>
+    <rect x="0" y="0" width="800" height="36" fill="#161b22"/>
+    <circle cx="22" cy="18" r="6" fill="#ff5f56"/>
+    <circle cx="44" cy="18" r="6" fill="#ffbd2e"/>
+    <circle cx="66" cy="18" r="6" fill="#27c93f"/>
+    <text x="400" y="23" fill="#8b949e" font-size="12.5" text-anchor="middle">winclean — pwsh</text>
+  </g>
+  <rect x="0.5" y="0.5" width="799" height="399" rx="10" ry="10" fill="none" stroke="#30363d"/>
+
+  <g font-size="13.5" xml:space="preserve" style="white-space:pre">
+    <text x="24" y="62"  fill="#79c0ff">$ winclean clean</text>
+
+    <text x="24" y="102" fill="#56d4dd">&#160;&#160;+-------------------------------------------+</text>
+    <text x="24" y="122" fill="#56d4dd">&#160;&#160;|&#160;&#160;&#160;Win Clean -- Windows storage &amp; app CLI&#160;&#160;&#160;|</text>
+    <text x="24" y="142" fill="#56d4dd">&#160;&#160;+-------------------------------------------+</text>
+
+    <text x="24" y="182" fill="#e6edf3">Win Clean — clean preview (nothing deleted; pass -Apply to actually clean)</text>
+
+    <text x="24" y="222"><tspan fill="#3fb950">&#160;&#160;&#160;&#160;&#160;412.6 MB</tspan><tspan fill="#c9d1d9">&#160;&#160;User Temp&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;212 items</tspan></text>
+    <text x="24" y="242"><tspan fill="#3fb950">&#160;&#160;&#160;&#160;&#160;128.9 MB</tspan><tspan fill="#c9d1d9">&#160;&#160;Internet Cache&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;1,304 items</tspan></text>
+    <text x="24" y="262"><tspan fill="#3fb950">&#160;&#160;&#160;&#160;&#160;&#160;31.2 MB</tspan><tspan fill="#c9d1d9">&#160;&#160;Error Reporting Queue&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;6 items</tspan></text>
+    <text x="24" y="282"><tspan fill="#3fb950">&#160;&#160;&#160;&#160;&#160;980.4 MB</tspan><tspan fill="#c9d1d9">&#160;&#160;Windows Update Download Cache 41 items&#160;&#160;</tspan><tspan fill="#d29922">[needs admin — re-run elevated]</tspan></text>
+    <text x="24" y="302"><tspan fill="#3fb950">&#160;&#160;&#160;&#160;&#160;&#160;&#160;6.1 MB</tspan><tspan fill="#c9d1d9">&#160;&#160;Thumbnail Cache&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;2 items</tspan></text>
+
+    <text x="24" y="342"><tspan fill="#e6edf3">&#160;&#160;Reclaimable now: </tspan><tspan fill="#3fb950" font-weight="bold">573.8 MB</tspan></text>
+    <text x="24" y="372" fill="#484f58" font-size="12">nothing here is a screen recording — this is a hand-kept SVG mockup of real -Json/table output</text>
+  </g>
+</svg>
