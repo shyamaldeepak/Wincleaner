@@ -165,15 +165,56 @@ doesn't automate — see `SECURITY.md` § Layer 5.
 
 ## Install 📦
 
+Run this once, from PowerShell, inside this project folder:
+
 ```powershell
 .\install.ps1
 ```
 
-Copies Win Clean to `%LOCALAPPDATA%\Programs\WinClean` and adds it to your
-user `PATH` (no admin rights required). Open a new terminal and run
-`winclean help`.
+That copies Win Clean to `%LOCALAPPDATA%\Programs\WinClean` and adds that
+folder to your **user** `PATH` — no admin rights required. From then on,
+`winclean` is a real command in any terminal on the machine: cmd.exe,
+Windows PowerShell 5.1, or PowerShell 7+.
 
-To run without installing, from this folder:
+### Why `winclean` works as a shortcut
+
+Two files make the shortcut work together:
+
+| File | Role |
+|---|---|
+| `winclean.cmd` | The thing that's actually on your `PATH` — a one-line shim: `powershell -NoProfile -ExecutionPolicy Bypass -File winclean.ps1 %*` |
+| `winclean.ps1` | The real entry point `winclean.cmd` hands off to |
+
+A bare `.ps1` file isn't directly executable from `PATH` on Windows — without
+this shim you'd have to type `powershell -File C:\...\winclean.ps1` every
+time. Because Windows' `PATHEXT` includes `.CMD` by default, typing
+`winclean` from *any* shell — cmd.exe **or** PowerShell — resolves to
+`winclean.cmd`, which launches `winclean.ps1` for you. The shim always
+invokes `powershell.exe` (Windows PowerShell 5.1) specifically, even if you
+also have PowerShell 7+ installed — that's intentional: 5.1 ships with every
+Windows install, so the shortcut works with zero extra setup either way.
+
+### Setup checklist
+
+1. `.\install.ps1` — copies the files, adds the folder to your user `PATH`.
+2. **Open a new terminal window.** PATH changes only take effect in
+   terminals started after the change — an already-open window won't see it.
+3. `winclean help` — should print the command list. Getting
+   "command not found"? The open terminal predates the PATH update; close
+   and reopen it (or sign out/in) and try again.
+
+### Uninstalling the shortcut
+
+There's no uninstaller script yet — remove it by hand:
+
+1. Delete `%LOCALAPPDATA%\Programs\WinClean`.
+2. Remove that path from your user `PATH` (Settings → System → About →
+   Advanced system settings → Environment Variables → `Path` under
+   "User variables").
+
+### Running without installing
+
+From this folder, with no shortcut set up at all:
 
 ```powershell
 .\winclean.ps1 status
