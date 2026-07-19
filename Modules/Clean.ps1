@@ -1,10 +1,10 @@
 # Clean.ps1 — known-safe, rebuildable Windows storage. Each catalog entry
 # names a directory whose CONTENTS get cleaned (not the directory itself,
 # which Windows/apps expect to keep existing). Every entry is chosen because
-# it is rebuildable/disposable, the same bar Mole's CLAUDE.md sets for its
-# own whitelist: "locally rebuildable, disposable, or backed by exact
-# app/bundle evidence" — this is a small, deliberately conservative catalog,
-# not an attempt to cover everything Windows could theoretically clean.
+# it is rebuildable/disposable — locally rebuildable, disposable, or backed
+# by exact app/package evidence — this is a small, deliberately conservative
+# catalog, not an attempt to cover everything Windows could theoretically
+# clean.
 #
 # Safety default: Invoke-WinCleanClean ALWAYS previews and NEVER deletes
 # unless called with -Apply. This is stricter than relying on PowerShell's

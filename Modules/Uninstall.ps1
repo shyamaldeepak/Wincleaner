@@ -3,10 +3,10 @@
 # apps from the registry Uninstall keys and Appx packages, and removes an
 # app by running THAT APP'S OWN uninstaller (UninstallString / MSI /
 # Remove-AppxPackage) — it never hand-deletes an install folder by guessing
-# at a name or vendor. That guess-based leftover matching is exactly what
-# caused Mole's PR #874/#875 incident (reverted twice after a wildcard
-# matched far more than intended), so this v1 intentionally does NOT attempt
-# automatic leftover-folder cleanup at all: if the registry's own
+# at a name or vendor. Guess-based leftover matching (a wildcard on app name
+# or vendor) is a well-known way for this kind of cleanup to match far more
+# than intended, so this v1 intentionally does NOT attempt automatic
+# leftover-folder cleanup at all: if the registry's own
 # InstallLocation value still exists after a successful uninstall, Win Clean
 # reports its path and size and leaves deleting it to the user (via
 # `winclean analyze`), rather than guessing it's safe to remove.

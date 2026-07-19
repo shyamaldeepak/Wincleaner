@@ -1,7 +1,7 @@
 # Remove-Safely.ps1 — the single choke point every command must use to
 # delete anything. Never call Remove-Item directly outside this file.
 #
-# Contract (mirrors Mole's mole_delete):
+# Contract:
 #   - Recycle Bin by default. A failed Recycle Bin move fails CLOSED — it
 #     never silently falls back to a permanent delete. Only -Permanent
 #     performs a real, unrecoverable delete.
@@ -42,8 +42,8 @@ function Remove-WinCleanItem {
 
     process {
         if (-not (Test-Path -LiteralPath $Path -ErrorAction SilentlyContinue)) {
-            # Matches Mole's mole_delete: a missing path is a silent no-op,
-            # not an error — the desired end state (path is gone) already holds.
+            # A missing path is a silent no-op, not an error — the desired
+            # end state (path is gone) already holds.
             return $true
         }
 

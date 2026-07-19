@@ -1,8 +1,7 @@
 # Safety.ps1 — path validation and the protected-path deny-list.
 # Every deletion in Win Clean must pass Test-WinCleanPathSafeToDelete first.
-# Mirrors the discipline (not the code) of Mole's validate_path_for_deletion /
-# should_protect_path: allow-list first, deny-list second, resolve reparse
-# points before either check so a junction can't be used to escape the gate.
+# Design: allow-list first, deny-list second, resolve reparse points before
+# either check so a junction can't be used to escape the gate.
 
 Add-Type -AssemblyName System.Core -ErrorAction SilentlyContinue
 
@@ -35,8 +34,8 @@ function Resolve-WinCleanRealPath {
     .SYNOPSIS
     Resolves a path to its final real path, following reparse points
     (symlinks/junctions) all the way down. Returns $null if the path cannot
-    be opened (including "does not exist" — callers treat that as a no-op,
-    same as Mole's mole_delete on a missing path).
+    be opened (including "does not exist" — callers treat that as a no-op:
+    a missing path is already the desired end state).
     #>
     param([Parameter(Mandatory)][string]$Path)
 

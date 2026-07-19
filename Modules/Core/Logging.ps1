@@ -1,6 +1,6 @@
 # Logging.ps1 — append-only forensic log for every delete/uninstall action,
-# independent of console output. Mirrors Mole's deletions.log: the log is the
-# audit trail even if the terminal output scrolled away or was piped elsewhere.
+# independent of console output: the log is the audit trail even if the
+# terminal output scrolled away or was piped elsewhere.
 
 function Get-WinCleanLogPath {
     # $env:LOCALAPPDATA is always set on real Windows; fall back for the

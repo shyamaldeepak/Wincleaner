@@ -9,7 +9,7 @@ function Get-WinCleanChildSizes {
     Returns the immediate children of Path (files and directories) with
     their total size, sorted descending. Directory sizes are computed
     recursively; unreadable subtrees are skipped rather than failing the
-    whole scan (matches Mole's "degrade to partial output, never hang").
+    whole scan — degrade to partial output, never hang.
     #>
     param([Parameter(Mandatory)][string]$Path)
 
