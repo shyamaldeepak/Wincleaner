@@ -68,6 +68,53 @@ function Get-WinCleanChildSizes {
     return @($results | Sort-Object -Property SizeBytes -Descending)
 }
 
+function Get-WinCleanDuplicateFiles {
+    <#
+    .SYNOPSIS
+    Finds exact-duplicate files under Path by content hash. Two-pass: group
+    by file size first (free — Get-ChildItem already reports it) so only
+    same-size candidates get hashed, then group those by SHA-256. Returns
+    groups of 2+ files sorted by reclaimable size (one copy's size times
+    duplicate-count-minus-one) descending. Read-only — reports only, never
+    deletes: which copy of a duplicate to keep is exactly the kind of
+    per-file judgment call SECURITY.md's uninstall section warns against
+    automating, so that decision is left to the user (e.g. via `analyze`'s
+    own interactive 'd' delete on a path this command prints out).
+    #>
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [long]$MinSizeBytes = 1024
+    )
+
+    $files = Get-ChildItem -LiteralPath $Path -Recurse -Force -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.Length -ge $MinSizeBytes }
+
+    $bySize = $files | Group-Object -Property Length | Where-Object { $_.Count -gt 1 }
+
+    $groups = foreach ($sizeGroup in $bySize) {
+        $hashed = foreach ($file in $sizeGroup.Group) {
+            try {
+                $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256 -ErrorAction Stop).Hash
+                [PSCustomObject]@{ Hash = $hash; FullPath = $file.FullName; SizeBytes = $file.Length }
+            } catch {
+                continue
+            }
+        }
+        $hashed | Group-Object -Property Hash | Where-Object { $_.Count -gt 1 } | ForEach-Object {
+            $sizeBytes = $_.Group[0].SizeBytes
+            [PSCustomObject]@{
+                Hash        = $_.Name
+                SizeBytes   = [long]$sizeBytes
+                Count       = $_.Count
+                WastedBytes = [long]$sizeBytes * ($_.Count - 1)
+                Files       = @($_.Group.FullPath)
+            }
+        }
+    }
+
+    return @($groups | Sort-Object -Property WastedBytes -Descending)
+}
+
 function Show-WinCleanAnalyzeTable {
     param(
         [Parameter(Mandatory)][string]$CurrentPath,
@@ -109,7 +156,9 @@ function Invoke-WinCleanAnalyze {
         [string]$Path = (Get-Location).Path,
         [int]$Top = 25,
         [switch]$Json,
-        [switch]$NonInteractive
+        [switch]$NonInteractive,
+        [switch]$Duplicates,
+        [long]$MinSizeBytes = 1024
     )
 
     $resolvedPath = try { [System.IO.Path]::GetFullPath($Path) } catch { $null }
@@ -118,10 +167,41 @@ function Invoke-WinCleanAnalyze {
         return
     }
 
-    if ($Json -or $NonInteractive -or -not [Environment]::UserInteractive) {
-        $items = Get-WinCleanChildSizes -Path $resolvedPath | Select-Object -First $Top
+    if ($Duplicates) {
+        $groups = @(Get-WinCleanDuplicateFiles -Path $resolvedPath -MinSizeBytes $MinSizeBytes | Select-Object -First $Top)
+
         if ($Json) {
-            $items | ConvertTo-Json -Depth 3
+            # -InputObject, not piped — see the -Json branch below for why.
+            ConvertTo-Json -InputObject $groups -Depth 4
+            return
+        }
+
+        Write-Host ''
+        Write-Host "Win Clean — duplicate files: $resolvedPath" -ForegroundColor Cyan
+        Write-Host ''
+        if ($groups.Count -eq 0) {
+            Write-Host '  (no exact duplicates found)'
+            return
+        }
+        foreach ($group in $groups) {
+            Write-Host ('  {0} wasted across {1} copies ({2} each)' -f (Format-WinCleanBytes -Bytes $group.WastedBytes), $group.Count, (Format-WinCleanBytes -Bytes $group.SizeBytes)) -ForegroundColor Yellow
+            foreach ($f in $group.Files) { Write-Host "    $f" }
+            Write-Host ''
+        }
+        $totalWasted = ($groups | Measure-Object -Property WastedBytes -Sum).Sum
+        Write-Host ('  Total reclaimable: {0}' -f (Format-WinCleanBytes -Bytes ([long]$totalWasted)))
+        Write-Host "  Read-only: re-run 'winclean analyze -Path <folder>' to delete a specific copy yourself."
+        return
+    }
+
+    if ($Json -or $NonInteractive -or -not [Environment]::UserInteractive) {
+        $items = @(Get-WinCleanChildSizes -Path $resolvedPath | Select-Object -First $Top)
+        if ($Json) {
+            # -InputObject, not piped: piping an empty array into ConvertTo-Json
+            # unrolls it to zero pipeline objects and produces NO output (not
+            # "[]"), breaking any script parsing -Json on a legitimately-empty
+            # directory.
+            ConvertTo-Json -InputObject $items -Depth 3
         } else {
             $items | Format-Table -Property @{ L = 'Size'; E = { Format-WinCleanBytes -Bytes $_.SizeBytes } }, Name, FullPath -AutoSize
         }

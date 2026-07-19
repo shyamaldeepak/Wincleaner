@@ -11,6 +11,30 @@
 # ShouldProcess/-WhatIf defaults, which would delete on a bare call.
 
 function Get-WinCleanCleanCatalog {
+    # $env:SystemRoot / $env:LOCALAPPDATA are empty on non-Windows hosts
+    # (this project is developed/tested on macOS — see CLAUDE.md), and
+    # Join-Path throws a ParameterBindingValidationException on a null Path
+    # argument instead of degrading gracefully — this crashed the entire
+    # catalog (and therefore every 'clean' invocation) on any non-Windows
+    # host before Clean.ps1 had any test coverage to catch it. Compute
+    # fallbacks once, matching the pattern Get-WinCleanProtectedRoots
+    # (Safety.ps1) and Get-WinCleanLogPath (Logging.ps1) already use.
+    #
+    # $systemRoot entries below use string concatenation, not Join-Path,
+    # for the same reason CLAUDE.md documents for Safety.ps1: Join-Path
+    # against ANY "C:\..." path — not just a bare "C:" — throws "Cannot
+    # find drive" wherever no live PSDrive named "C" exists, which is
+    # always true on non-Windows and can be true in constrained Windows
+    # environments too.
+    $systemDrive = $env:SystemDrive
+    if (-not $systemDrive) { $systemDrive = 'C:' }
+    $systemRoot = $env:SystemRoot
+    if (-not $systemRoot) { $systemRoot = "$systemDrive\Windows" }
+    $localAppData = $env:LOCALAPPDATA
+    if (-not $localAppData) {
+        $localAppData = if ($env:USERPROFILE) { Join-Path $env:USERPROFILE 'AppData\Local' } else { [System.IO.Path]::GetTempPath() }
+    }
+
     $entries = @(
         [PSCustomObject]@{
             Name            = 'User Temp'
@@ -22,7 +46,7 @@ function Get-WinCleanCleanCatalog {
         }
         [PSCustomObject]@{
             Name            = 'Windows Temp'
-            Path            = (Join-Path $env:SystemRoot 'Temp')
+            Path            = "$systemRoot\Temp"
             FilePattern     = '*'
             RequiresAdmin   = $true
             Enabled         = $true
@@ -30,7 +54,7 @@ function Get-WinCleanCleanCatalog {
         }
         [PSCustomObject]@{
             Name            = 'Internet Cache'
-            Path            = (Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\INetCache')
+            Path            = (Join-Path $localAppData 'Microsoft\Windows\INetCache')
             FilePattern     = '*'
             RequiresAdmin   = $false
             Enabled         = $true
@@ -38,7 +62,7 @@ function Get-WinCleanCleanCatalog {
         }
         [PSCustomObject]@{
             Name            = 'Error Reporting Queue'
-            Path            = (Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\WER\ReportQueue')
+            Path            = (Join-Path $localAppData 'Microsoft\Windows\WER\ReportQueue')
             FilePattern     = '*'
             RequiresAdmin   = $false
             Enabled         = $true
@@ -46,7 +70,7 @@ function Get-WinCleanCleanCatalog {
         }
         [PSCustomObject]@{
             Name            = 'Error Reporting Archive'
-            Path            = (Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\WER\ReportArchive')
+            Path            = (Join-Path $localAppData 'Microsoft\Windows\WER\ReportArchive')
             FilePattern     = '*'
             RequiresAdmin   = $false
             Enabled         = $true
@@ -54,7 +78,7 @@ function Get-WinCleanCleanCatalog {
         }
         [PSCustomObject]@{
             Name            = 'Windows Update Download Cache'
-            Path            = (Join-Path $env:SystemRoot 'SoftwareDistribution\Download')
+            Path            = "$systemRoot\SoftwareDistribution\Download"
             FilePattern     = '*'
             RequiresAdmin   = $true
             Enabled         = $true
@@ -62,7 +86,7 @@ function Get-WinCleanCleanCatalog {
         }
         [PSCustomObject]@{
             Name            = 'Thumbnail Cache'
-            Path            = (Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Explorer')
+            Path            = (Join-Path $localAppData 'Microsoft\Windows\Explorer')
             FilePattern     = 'thumbcache_*.db'
             RequiresAdmin   = $false
             Enabled         = $true
@@ -70,7 +94,7 @@ function Get-WinCleanCleanCatalog {
         }
         [PSCustomObject]@{
             Name            = 'Prefetch'
-            Path            = (Join-Path $env:SystemRoot 'Prefetch')
+            Path            = "$systemRoot\Prefetch"
             FilePattern     = '*.pf'
             RequiresAdmin   = $true
             Enabled         = $false
@@ -78,6 +102,70 @@ function Get-WinCleanCleanCatalog {
         }
     )
     return $entries
+}
+
+function Get-WinCleanRecycleBinPreview {
+    <#
+    .SYNOPSIS
+    Reports current Recycle Bin contents without touching them. Uses the
+    Shell.Application COM object — the same API Explorer's own "Empty
+    Recycle Bin" uses — rather than enumerating $Recycle.Bin on disk, which
+    is a protected root (Get-WinCleanProtectedRoots) that Win Clean
+    deliberately never reads or writes directly: its on-disk layout
+    (per-SID subfolders, paired $I../$R.. bookkeeping files) is opaque OS
+    internals, not a directory a general-purpose scan should parse. Never
+    throws — reports Available = $false on any host without the Shell COM
+    object (e.g. non-Windows, where this project is developed/tested).
+    #>
+    try {
+        $shell = New-Object -ComObject Shell.Application -ErrorAction Stop
+        $bin = $shell.Namespace(0xA)
+        if (-not $bin) { return [PSCustomObject]@{ ItemCount = 0; SizeBytes = 0L; Available = $false } }
+        $items = @($bin.Items())
+        $size = ($items | ForEach-Object { [long]$_.Size } | Measure-Object -Sum).Sum
+        if ($null -eq $size) { $size = 0L }
+        return [PSCustomObject]@{ ItemCount = $items.Count; SizeBytes = [long]$size; Available = $true }
+    } catch {
+        return [PSCustomObject]@{ ItemCount = 0; SizeBytes = 0L; Available = $false }
+    }
+}
+
+function Clear-WinCleanRecycleBin {
+    <#
+    .SYNOPSIS
+    Empties the Recycle Bin via the built-in Clear-RecycleBin cmdlet.
+    Deliberately does NOT go through Remove-WinCleanItem /
+    Test-WinCleanPathSafeToDelete: those gate a caller-supplied filesystem
+    path, and this action takes none — Clear-RecycleBin operates on the
+    OS's own Recycle Bin bookkeeping for a fixed set of drives, the same
+    mechanism Explorer's own "Empty Recycle Bin" menu item uses. This is
+    irreversible by definition (there is no further trash to fall back to,
+    unlike a normal Remove-WinCleanItem call), so it only ever runs behind
+    Invoke-WinCleanClean's own -Apply gate — never implicitly.
+    #>
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
+    param()
+
+    if (-not (Get-Command -Name Clear-RecycleBin -ErrorAction SilentlyContinue)) {
+        Write-WinCleanLog -Action 'empty-recycle-bin' -Status 'unavailable' -Detail 'Clear-RecycleBin cmdlet not present on this host'
+        return $false
+    }
+
+    $before = Get-WinCleanRecycleBinPreview
+    if (-not $PSCmdlet.ShouldProcess('Recycle Bin', 'Empty')) {
+        Write-WinCleanLog -Action 'empty-recycle-bin' -Status 'dry-run' -SizeBytes $before.SizeBytes
+        return $true
+    }
+
+    try {
+        Clear-RecycleBin -Force -ErrorAction Stop
+        Write-WinCleanLog -Action 'empty-recycle-bin' -Status 'ok' -SizeBytes $before.SizeBytes
+        return $true
+    } catch {
+        Write-WinCleanLog -Action 'empty-recycle-bin' -Status 'error' -SizeBytes $before.SizeBytes -Detail $_.Exception.Message
+        Write-Error "Win Clean failed to empty the Recycle Bin: $($_.Exception.Message)"
+        return $false
+    }
 }
 
 function Get-WinCleanCleanPreview {
@@ -116,6 +204,29 @@ function Get-WinCleanCleanPreview {
             Files         = $files
         }
     }
+
+    # Recycle Bin is opt-in only (Enabled = $false), same as Prefetch above:
+    # emptying it is the one entry in this catalog that is genuinely
+    # irreversible (every other entry moves TO the Recycle Bin; this empties
+    # it), so it never appears — and never gets applied — without
+    # -IncludeDisabled making that an explicit choice.
+    if ($IncludeDisabled) {
+        $binPreview = Get-WinCleanRecycleBinPreview
+        if ($binPreview.Available) {
+            [PSCustomObject]@{
+                Name          = 'Recycle Bin'
+                Path          = $null
+                ItemCount     = $binPreview.ItemCount
+                SizeBytes     = $binPreview.SizeBytes
+                RequiresAdmin = $false
+                Skipped       = $false
+                Enabled       = $false
+                Description   = 'Already-deleted files waiting in the Recycle Bin. Emptying is permanent — there is no further trash to recover from.'
+                Files         = @()
+                IsRecycleBin  = $true
+            }
+        }
+    }
 }
 
 function Invoke-WinCleanClean {
@@ -128,8 +239,14 @@ function Invoke-WinCleanClean {
     $preview = @(Get-WinCleanCleanPreview -IncludeDisabled:$IncludeDisabled)
 
     if ($Json) {
-        $preview | Select-Object Name, Path, ItemCount, SizeBytes, RequiresAdmin, Skipped, Enabled, Description |
-            ConvertTo-Json -Depth 3
+        # ConvertTo-Json -InputObject (not piped): piping an empty array into
+        # ConvertTo-Json unrolls it to zero pipeline objects and produces NO
+        # output at all (not "[]"), which breaks any script parsing -Json
+        # output on a legitimately-empty result (e.g. nothing to clean).
+        # -InputObject passes the array as a single argument instead, so an
+        # empty result still serializes to "[]".
+        $selected = @($preview | Select-Object Name, Path, ItemCount, SizeBytes, RequiresAdmin, Skipped, Enabled, Description)
+        ConvertTo-Json -InputObject $selected -Depth 3
         if (-not $Apply) { return }
     } elseif (-not $Apply) {
         Write-Host ''
@@ -149,6 +266,10 @@ function Invoke-WinCleanClean {
     foreach ($item in $preview) {
         if ($item.Skipped) {
             Write-Warning "Win Clean: skipping '$($item.Name)' — requires administrator, re-run elevated to include it."
+            continue
+        }
+        if ($item.IsRecycleBin) {
+            Clear-WinCleanRecycleBin -Confirm:$false | Out-Null
             continue
         }
         foreach ($file in $item.Files) {

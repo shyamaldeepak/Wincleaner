@@ -15,6 +15,8 @@ $commands = @(
     'Modules/Analyze.ps1'
     'Modules/Clean.ps1'
     'Modules/Uninstall.ps1'
+    'Modules/History.ps1'
+    'Modules/Startup.ps1'
 )
 
 foreach ($relativePath in ($core + $commands)) {

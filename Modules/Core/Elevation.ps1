@@ -5,7 +5,16 @@
 # never self-elevates.
 
 function Test-WinCleanIsAdmin {
-    $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
-    $principal = New-Object System.Security.Principal.WindowsPrincipal($identity)
-    return $principal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)
+    # WindowsIdentity/WindowsPrincipal are Windows-only .NET APIs — GetCurrent()
+    # throws PlatformNotSupportedException on non-Windows hosts, which this
+    # project is developed/tested on (CLAUDE.md). Default to $false there: the
+    # only callers gate admin-required actions behind this result, and skipping
+    # those is the safe/conservative degrade — never "assume elevated."
+    try {
+        $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+        $principal = New-Object System.Security.Principal.WindowsPrincipal($identity)
+        return $principal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)
+    } catch {
+        return $false
+    }
 }

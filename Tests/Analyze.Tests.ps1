@@ -38,3 +38,45 @@ Describe 'Invoke-WinCleanAnalyze non-interactive path' {
         { $json | ConvertFrom-Json } | Should -Not -Throw
     }
 }
+
+Describe 'Get-WinCleanDuplicateFiles' {
+    BeforeAll {
+        $script:DupRoot = Join-Path $env:TEMP ("winclean-dup-" + [guid]::NewGuid())
+        New-Item -ItemType Directory -Path $script:DupRoot -Force | Out-Null
+        Set-Content -LiteralPath (Join-Path $script:DupRoot 'a.txt') -Value ('x' * 2000) -NoNewline
+        Set-Content -LiteralPath (Join-Path $script:DupRoot 'b.txt') -Value ('x' * 2000) -NoNewline
+        Set-Content -LiteralPath (Join-Path $script:DupRoot 'c.txt') -Value ('y' * 2000) -NoNewline
+    }
+    AfterAll {
+        Remove-Item -LiteralPath $script:DupRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    It 'groups files with identical content' {
+        $groups = @(Get-WinCleanDuplicateFiles -Path $script:DupRoot -MinSizeBytes 1)
+        $groups.Count | Should -Be 1
+        $groups[0].Count | Should -Be 2
+        $groups[0].Files | Should -Contain (Join-Path $script:DupRoot 'a.txt')
+        $groups[0].Files | Should -Contain (Join-Path $script:DupRoot 'b.txt')
+    }
+    It 'does not group files with different content, even at the same size' {
+        $groups = @(Get-WinCleanDuplicateFiles -Path $script:DupRoot -MinSizeBytes 1)
+        ($groups[0].Files) -notcontains (Join-Path $script:DupRoot 'c.txt') | Should -BeTrue
+    }
+    It 'excludes files below MinSizeBytes' {
+        $groups = @(Get-WinCleanDuplicateFiles -Path $script:DupRoot -MinSizeBytes 999999)
+        $groups.Count | Should -Be 0
+    }
+    It 'reports WastedBytes as size times (count-1)' {
+        $groups = @(Get-WinCleanDuplicateFiles -Path $script:DupRoot -MinSizeBytes 1)
+        $groups[0].WastedBytes | Should -Be $groups[0].SizeBytes
+    }
+}
+
+Describe 'Invoke-WinCleanAnalyze -Duplicates' {
+    It 'does not throw with -Duplicates -Json' {
+        { Invoke-WinCleanAnalyze -Path $script:TestRoot -Duplicates -Json } | Should -Not -Throw
+    }
+    It 'produces valid JSON' {
+        $json = Invoke-WinCleanAnalyze -Path $script:TestRoot -Duplicates -Json | Out-String
+        { $json | ConvertFrom-Json } | Should -Not -Throw
+    }
+}

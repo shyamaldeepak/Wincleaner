@@ -101,6 +101,33 @@ queue). Admin-required entries (Windows Update cache) are skipped with a
 message rather than self-elevating — Win Clean never relaunches itself
 with `Start-Process -Verb RunAs`.
 
+## Layer 3b — emptying the Recycle Bin is the one deliberate exception
+
+`Clear-WinCleanRecycleBin` (`Modules/Clean.ps1`) empties the Recycle Bin
+via the built-in `Clear-RecycleBin` cmdlet — the same mechanism Explorer's
+own "Empty Recycle Bin" menu item uses. It deliberately does **not** go
+through `Remove-WinCleanItem` / `Test-WinCleanPathSafeToDelete`: those
+gate a caller-supplied filesystem path, and this action takes none —
+`Clear-RecycleBin` operates on the OS's own Recycle Bin bookkeeping for a
+fixed set of drives, not a path Win Clean resolved from user input or a
+scan.
+
+This is also the one entry in the `clean` catalog that is genuinely
+irreversible — every other entry *moves things into* the Recycle Bin;
+this one empties it, so there's no further trash to recover from if it
+runs by mistake. It's therefore opt-in only (`Enabled = $false` in the
+preview, same mechanism as `Prefetch`) and only ever runs behind `clean
+-IncludeDisabled -Apply` — never implicitly, and never as a default
+`-Apply` action.
+
+`Get-WinCleanRecycleBinPreview` (read-only: reports current Recycle Bin
+size/count) uses the `Shell.Application` COM namespace object rather than
+enumerating `$Recycle.Bin` on disk — that folder is one of the protected
+subtree roots in `Get-WinCleanProtectedRoots` (see Layer 1), and its
+on-disk layout (per-SID subfolders, paired bookkeeping files) is opaque OS
+internals that no general-purpose scan in this project should parse
+directly, preview or otherwise.
+
 ## Layer 4 — `uninstall` never guesses
 
 `Uninstall-WinCleanApp` runs the app's own uninstall command (registry
@@ -116,6 +143,24 @@ Any future PR attempting that needs deliberately narrow, exact-match logic
 (the registry's own recorded path, nothing derived from the app's name)
 and its own dedicated test coverage before merge.
 
+## Layer 5 — read-only commands never pick a winner
+
+`startup` (`Modules/Startup.ps1`) and `analyze -Duplicates`
+(`Get-WinCleanDuplicateFiles` in `Modules/Analyze.ps1`) both inventory
+things a user might reasonably want to act on — a startup entry to
+disable, a duplicate copy to delete — and deliberately stop at reporting.
+Neither has a delete/disable action in this version. "Which one is safe to
+remove" is exactly the kind of per-item judgment call Layer 4 above
+already flags as the highest-risk shape a feature can take: a startup
+entry might be load-bearing for a background service the user doesn't
+recognize by name, and of two duplicate files, only the user knows which
+path is the "real" one worth keeping. If either of these grows a
+delete/disable action later, it must go through the same gates as
+everything else (`Remove-WinCleanItem` for a duplicate file; its own
+narrowly-scoped, tested toggle for a startup entry) and should not infer
+which entry to act on from anything but an explicit, individual selection
+by the user.
+
 ## Test coverage
 
 - `Tests/Safety.Tests.ps1` — protected-root membership and the full
@@ -126,8 +171,16 @@ and its own dedicated test coverage before merge.
   are skipped off Windows (`-Skip:(-not $IsWindows)`); a third test proves
   the fail-closed behavior using whatever this platform's Recycle Bin
   failure actually looks like.
-- `Tests/Uninstall.Tests.ps1` — inventory logic and the "never fabricate
-  an uninstall command" guarantee.
+- `Tests/Uninstall.Tests.ps1` — inventory logic, the "never fabricate an
+  uninstall command" guarantee, and (regression) that `-Json` degrades to
+  a real `"[]"` rather than the literal string `"null"` on an empty match.
+- `Tests/Clean.Tests.ps1` — `Get-WinCleanRecycleBinPreview` and
+  `Clear-WinCleanRecycleBin` never throw off-Windows, and the Recycle Bin
+  entry only ever appears in the catalog with `-IncludeDisabled`.
+- `Tests/History.Tests.ps1` — filtering/`-Last`, and that a corrupt log
+  line is skipped rather than failing the whole read.
+- `Tests/Startup.Tests.ps1` — registry/folder enumeration never throws
+  off-Windows or when the Startup folder is missing.
 
 Before merging any change to `Modules/Core/Safety.ps1` or
 `Modules/Core/Remove-Safely.ps1`, run the full suite

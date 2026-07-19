@@ -28,4 +28,17 @@ Describe 'Uninstall inventory' {
         }
         Uninstall-WinCleanApp -App $fake -Confirm:$false -ErrorAction SilentlyContinue | Should -BeFalse
     }
+
+    It 'produces a JSON array — not the bare string "null" — when -Filter matches nothing' {
+        # Regression test: piping an empty array into ConvertTo-Json (or
+        # assigning a function's empty result to a caller variable without
+        # wrapping it in @()) silently degrades to no output or the literal
+        # string "null" instead of "[]" — see Invoke-WinCleanUninstall and
+        # Get-WinCleanInstalledApps for the fix. A filter guaranteed not to
+        # match anything on this test host proves the -Json path degrades
+        # correctly to an empty JSON array either way.
+        $json = Invoke-WinCleanUninstall -Filter 'winclean-guaranteed-no-match-zzz' -Json | Out-String
+        $json.Trim() | Should -Not -Be 'null'
+        $json.Trim() | Should -Be '[]'
+    }
 }

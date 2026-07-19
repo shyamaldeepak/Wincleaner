@@ -129,7 +129,13 @@ function Invoke-WinCleanUninstall {
         [switch]$Json
     )
 
-    $apps = Get-WinCleanInstalledApps -Filter $Filter
+    # @(...) around the call, not just inside Get-WinCleanInstalledApps's own
+    # `return @($apps)`: a function returning zero objects still hands the
+    # caller PowerShell's internal "no pipeline output" value rather than a
+    # real empty array once it crosses the call boundary unwrapped, which
+    # made ConvertTo-Json -InputObject $apps below serialize to the literal
+    # string "null" instead of "[]" for a -Filter that matches nothing.
+    $apps = @(Get-WinCleanInstalledApps -Filter $Filter)
 
     if ($PSBoundParameters.ContainsKey('Remove')) {
         if ($Remove -lt 1 -or $Remove -gt $apps.Count) {
@@ -146,7 +152,11 @@ function Invoke-WinCleanUninstall {
     }
 
     if ($Json) {
-        $apps | ConvertTo-Json -Depth 3
+        # -InputObject, not piped: piping an empty array into ConvertTo-Json
+        # unrolls it to zero pipeline objects and produces NO output (not
+        # "[]"), breaking any script parsing -Json on a legitimately-empty
+        # result (e.g. a -Filter that matches nothing).
+        ConvertTo-Json -InputObject $apps -Depth 3
         return
     }
 

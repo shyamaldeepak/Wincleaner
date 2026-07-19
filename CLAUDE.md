@@ -37,8 +37,12 @@ is the Windows-native counterpart to a similar idea, not a port of one.
     message. (An earlier `Invoke-WinCleanElevated` was removed for having
     zero callers — see "dead code" note below.)
   - `Format.ps1` — `Format-WinCleanBytes`, shared byte-count display.
-- `Modules/Status.ps1`, `Analyze.ps1`, `Clean.ps1`, `Uninstall.ps1` — one
-  command each, all built on the Core layer above.
+- `Modules/Status.ps1`, `Analyze.ps1`, `Clean.ps1`, `Uninstall.ps1`,
+  `History.ps1`, `Startup.ps1` — one command each, all built on the Core
+  layer above. `Analyze.ps1` also holds `Get-WinCleanDuplicateFiles` (the
+  `-Duplicates` mode); `Clean.ps1` also holds the opt-in Recycle-Bin-empty
+  action (`Clear-WinCleanRecycleBin`, surfaced via `clean -IncludeDisabled
+  -Apply`).
 - `Tests/*.Tests.ps1` — Pester, one file per module.
 - `install.ps1` — per-user install (copies to
   `%LOCALAPPDATA%\Programs\WinClean`, adds to user `PATH`). No admin
@@ -55,7 +59,11 @@ Import-Module ./WinClean.psd1 -Force                 # load for interactive test
 .\winclean.ps1 analyze -Path C:\Users\me -NonInteractive -Top 20
 .\winclean.ps1 clean                                 # preview only
 .\winclean.ps1 clean -Apply                          # actually deletes
+.\winclean.ps1 clean -IncludeDisabled -Apply          # also empties Recycle Bin, clears Prefetch
 .\winclean.ps1 uninstall -Filter <name>
+.\winclean.ps1 startup                               # read-only: Run keys + Startup folders
+.\winclean.ps1 history -Last 20                      # read the operations log
+.\winclean.ps1 analyze -Path C:\Users\me -Duplicates  # exact-duplicate files by hash
 ```
 
 This project was built and is regularly exercised on **macOS** with
@@ -84,6 +92,24 @@ by-eye review missed.
 - A failed Recycle Bin move must fail closed (return `$false`, never fall
   back to permanent delete) — this is the load-bearing invariant in
   `Remove-WinCleanItem`, keep the try/catch structure that enforces it.
+- `Clear-WinCleanRecycleBin` (`Modules/Clean.ps1`) is the one deliberate
+  exception to "every deletion goes through `Remove-WinCleanItem`": it
+  takes no caller-supplied path (it calls the built-in `Clear-RecycleBin`
+  cmdlet, the same mechanism as Explorer's own "Empty Recycle Bin"), so
+  there is no path for `Test-WinCleanPathSafeToDelete` to gate. It only
+  ever runs behind `clean -IncludeDisabled -Apply` — never implicitly —
+  because unlike every other `Remove-WinCleanItem` call, this one is
+  genuinely irreversible (there is no further trash to recover from). Any
+  new action shaped like this (no path parameter, so the normal gate
+  doesn't apply) needs the same treatment: opt-in only, its own
+  `ShouldProcess`, its own log entries, and a comment explaining why it
+  bypasses Layer 1/2 — see `SECURITY.md` § Layer 3.
+- A "which copy/entry is safe to act on" judgment call (e.g. which
+  duplicate file to delete, which startup entry to disable) is never
+  automated — report it and let the user decide, the same principle
+  `SECURITY.md` § Layer 4 already applies to uninstall leftovers.
+  `Get-WinCleanDuplicateFiles` (`Modules/Analyze.ps1`) and `startup`
+  (`Modules/Startup.ps1`) are both read-only for exactly this reason.
 
 ## PowerShell pitfalls hit on this codebase (real bugs, not theoretical)
 
@@ -157,12 +183,73 @@ touching the same area.
   references and removed. Before adding a new Core helper "for future use
   by X", either wire it up in the same change or don't add it — this repo
   has already had one orphaned helper.
+- **`Join-Path` throws "Cannot find drive" for *any* `"C:\..."`-shaped
+  path, not just a bare `"C:"`** — the earlier note above about bare drive
+  letters undersold this. `Join-Path "C:\Windows" "Temp"` also throws on a
+  host with no live PSDrive named `C` (any non-Windows host, this
+  project's whole test environment), because `Join-Path` resolves the
+  drive component for *every* rooted Windows-style path it's given, not
+  only a driveless one. `Get-WinCleanCleanCatalog`'s three `$env:SystemRoot`-
+  derived entries (`Windows Temp`, Windows Update cache, `Prefetch`) hit
+  this — even after adding the `$systemRoot` fallback, `Join-Path
+  $systemRoot 'Temp'` still threw. Fixed the same way `Safety.ps1` already
+  had to: plain string concatenation (`"$systemRoot\Temp"`), not
+  `Join-Path`, for anything built from a Windows drive-rooted string. This
+  had zero test coverage until `Clean.Tests.ps1` was added, so it shipped
+  invisibly.
+- **`WindowsIdentity`/`WindowsPrincipal` throw
+  `PlatformNotSupportedException` on non-Windows hosts** — `Get-CurrentIsAdmin`
+  equivalents built on these .NET types (`Test-WinCleanIsAdmin` in
+  `Elevation.ps1`) must wrap the call in try/catch and default to `$false`,
+  not let it propagate. `$false` is the correct degrade here (not just
+  convenient): the only callers gate admin-required actions behind this
+  result, so "assume not elevated" is the conservative choice, same
+  direction as every other non-Windows fallback in this file. Also had
+  zero test coverage until `Clean.Tests.ps1` exercised
+  `Get-WinCleanCleanPreview` for the first time.
+- **Piping a possibly-empty array into `ConvertTo-Json` silently produces
+  NO output at all — not `"[]"`** — `$emptyArray | ConvertTo-Json` unrolls
+  the array into zero pipeline objects, so `ConvertTo-Json` never runs.
+  Any `-Json` output path whose result can legitimately be empty (an
+  `uninstall -Filter` that matches nothing, a `clean` preview with nothing
+  to show, `history`/`startup`/`analyze -Duplicates` with no results) must
+  call `ConvertTo-Json -InputObject $array -Depth N` instead of `$array |
+  ConvertTo-Json` — passing the array as one argument, not unrolling it
+  through the pipeline, is what makes an empty result serialize to `"[]"`.
+  This was already latent in `Clean.ps1`/`Uninstall.ps1`/`Analyze.ps1`
+  before this fix; every `-Json` branch in the codebase now uses
+  `-InputObject`.
+- **That same fix only works if the variable is actually an array at the
+  call site** — a function that internally does `return @($result)` can
+  still hand the *caller* PowerShell's internal "no pipeline output"
+  marker instead of a real empty array, if the caller's own assignment
+  (`$apps = Get-WinCleanInstalledApps -Filter $Filter`) isn't itself
+  wrapped in `@(...)`. That marker behaves like `$null` for
+  `ConvertTo-Json -InputObject` (serializes to the literal string
+  `"null"`), even though the exact same value re-wrapped as `@($apps)`
+  correctly measures `Count -eq 0`. `Invoke-WinCleanUninstall` had this
+  bug — fixed by wrapping the call site: `$apps = @(Get-WinCleanInstalledApps
+  -Filter $Filter)`. This is why every other command in this codebase
+  already wraps a function-call assignment in `@(...)` (e.g. `$preview =
+  @(Get-WinCleanCleanPreview ...)`) — it's not stylistic, it's required for
+  correct empty-result behavior one call boundary away from where the
+  array was built.
 
 ## Verification
 
 - `Invoke-Pester ./Tests/` — must be 0 failed before any change is
-  considered done. 2 tests are expected to skip on non-Windows
-  (`RemoveSafely.Tests.ps1`, guarded by `-Skip:(-not $IsWindows)`).
+  considered done. 3 tests are expected to skip on non-Windows
+  (`RemoveSafely.Tests.ps1` ×2, `Clean.Tests.ps1` ×1, all guarded by
+  `-Skip:(-not $IsWindows)`).
+- **A minimal/CI-style shell may not have `$env:TEMP` set** even on
+  macOS/Linux (only `$env:TMPDIR` is guaranteed there) — several test
+  files (`Analyze.Tests.ps1`, `RemoveSafely.Tests.ps1`, `Safety.Tests.ps1`,
+  `History.Tests.ps1`) use `$env:TEMP` as their scratch-directory root.
+  This isn't a codebase bug (real Windows always has `TEMP` set), but if
+  `Invoke-Pester` fails with `Cannot bind argument ... because it is null`
+  pointing at a `-LiteralPath`/`-Path` call, check `$env:TEMP` first before
+  assuming a regression: `export TEMP="$TMPDIR"` before invoking `pwsh`
+  fixes it for that shell.
 - For anything touching `winclean.ps1` itself (argument parsing/dispatch),
   run actual CLI invocations, not just the Pester suite — the splat bug
   above was invisible to unit tests that call module functions directly

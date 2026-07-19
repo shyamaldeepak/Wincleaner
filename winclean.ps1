@@ -45,6 +45,24 @@ if ($args.Count -eq 0) {
 
 Import-Module (Join-Path $PSScriptRoot 'WinClean.psd1') -Force
 
+function Show-WinCleanBanner {
+    <#
+    .SYNOPSIS
+    Small ASCII banner printed at the top of every interactive terminal
+    invocation — this is "how the CLI looks in the terminal," live rather
+    than a static screenshot/GIF, so it never goes stale. Plain ASCII box
+    characters only (+/-/|), not Unicode box-drawing glyphs, to avoid any
+    code-page rendering surprise on Windows PowerShell 5.1 consoles. Skipped
+    whenever the invocation looks machine-consumed, so scripts/tests parsing
+    stdout never see it mixed into their output.
+    #>
+    Write-Host ''
+    Write-Host '  +-------------------------------------------+' -ForegroundColor Cyan
+    Write-Host '  |   Win Clean -- Windows storage & app CLI   |' -ForegroundColor Cyan
+    Write-Host '  +-------------------------------------------+' -ForegroundColor DarkCyan
+    Write-Host ''
+}
+
 function Show-WinCleanHelp {
     @'
 Win Clean — a native PowerShell CLI for Windows storage/app cleanup.
@@ -57,10 +75,18 @@ Commands:
               -TrimWorkingSets runs a marginal, explicitly-opt-in RAM trim.
   analyze     Interactive disk usage browser, largest -> smallest.
               -Path <dir> -Top <n> -Json -NonInteractive
+              -Duplicates finds exact-duplicate files by content hash.
   clean       Preview known-safe rebuildable storage to clean.
               -Apply actually deletes (default is preview-only).
+              -IncludeDisabled also shows/applies opt-in-only entries
+              (Prefetch, emptying the Recycle Bin).
   uninstall   List installed applications. -Filter <text> to search.
               -Remove <index> to uninstall a specific app.
+  startup     List programs configured to launch at logon (registry Run
+              keys + Startup folders). Read-only.
+  history     Show past clean/uninstall/delete actions from the operations
+              log. -Action <name> -Status <ok|error|rejected|...>
+              -Last <n> -Json
   version     Print the Win Clean version.
   help        Show this message.
 
@@ -70,11 +96,20 @@ the module directly. Every action is logged to:
 '@ | Write-Host
 }
 
+# Automation/tests parse stdout directly, so the banner is suppressed
+# whenever -Json or -NonInteractive appears anywhere in the arguments —
+# case-insensitive substring match is deliberate here since these are
+# display-only flags, not safety-critical input needing exact parsing.
+$suppressBanner = ($args | Where-Object { $_ -is [string] -and $_ -match '^-(Json|NonInteractive)$' }).Count -gt 0
+if (-not $suppressBanner) { Show-WinCleanBanner }
+
 switch ($Command.ToLowerInvariant()) {
     'status' { Invoke-WinCleanStatus @args }
     'analyze' { Invoke-WinCleanAnalyze @args }
     'clean' { Invoke-WinCleanClean @args }
     'uninstall' { Invoke-WinCleanUninstall @args }
+    'startup' { Invoke-WinCleanStartup @args }
+    'history' { Invoke-WinCleanHistory @args }
     'version' { Write-Host 'Win Clean 0.1.0' }
     'help' { Show-WinCleanHelp }
     default {
