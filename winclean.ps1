@@ -32,7 +32,7 @@ by direct testing, rule that out:
 #>
 
 if ($args.Count -eq 0) {
-    $Command = 'help'
+    $Command = 'menu'
     $args = @()
 } else {
     $Command = $args[0]
@@ -104,13 +104,16 @@ $suppressBanner = ($args | Where-Object { $_ -is [string] -and $_ -match '^-(Jso
 if (-not $suppressBanner) { Show-WinCleanBanner }
 
 switch ($Command.ToLowerInvariant()) {
+    'menu' { Invoke-WinCleanMenu }
     'status' { Invoke-WinCleanStatus @args }
     'analyze' { Invoke-WinCleanAnalyze @args }
     'clean' { Invoke-WinCleanClean @args }
     'uninstall' { Invoke-WinCleanUninstall @args }
     'startup' { Invoke-WinCleanStartup @args }
     'history' { Invoke-WinCleanHistory @args }
-    'version' { Write-Host 'Win Clean 0.1.0' }
+    'health' { Invoke-WinCleanHealth @args }
+    'optimize' { Invoke-WinCleanHealth -FlushDns }
+    'version' { Write-Host 'Win Clean 0.2.0' }
     'help' { Show-WinCleanHelp }
     default {
         Write-Error "Win Clean: unknown command '$Command'. Run 'winclean help'."

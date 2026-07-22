@@ -16,7 +16,7 @@ if (Test-Path -LiteralPath $InstallDir) {
 }
 New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
 
-$itemsToCopy = @('winclean.ps1', 'winclean.cmd', 'WinClean.psd1', 'WinClean.psm1', 'Modules')
+$itemsToCopy = @('winclean.ps1', 'winclean.cmd', 'wc.cmd', 'WinClean.psd1', 'WinClean.psm1', 'Modules')
 foreach ($item in $itemsToCopy) {
     Copy-Item -Path (Join-Path $source $item) -Destination $InstallDir -Recurse -Force
 }

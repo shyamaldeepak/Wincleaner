@@ -30,11 +30,17 @@ Describe 'Get-WinCleanStartupFolderEntries' {
 
     Context 'when the Startup folder is missing' {
         It 'never throws and returns nothing' {
-            $original = $env:APPDATA
+            $originalAppData = $env:APPDATA
+            $originalProgramData = $env:ProgramData
             $env:APPDATA = Join-Path $env:TEMP ('winclean-does-not-exist-' + [guid]::NewGuid())
-            { Get-WinCleanStartupFolderEntries } | Should -Not -Throw
-            @(Get-WinCleanStartupFolderEntries) | Should -BeNullOrEmpty
-            $env:APPDATA = $original
+            $env:ProgramData = Join-Path $env:TEMP ('winclean-does-not-exist-' + [guid]::NewGuid())
+            try {
+                { Get-WinCleanStartupFolderEntries } | Should -Not -Throw
+                @(Get-WinCleanStartupFolderEntries) | Should -BeNullOrEmpty
+            } finally {
+                $env:APPDATA = $originalAppData
+                $env:ProgramData = $originalProgramData
+            }
         }
     }
 }

@@ -4,9 +4,9 @@
 PC — all from the terminal.
 
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-5391FE?logo=powershell&logoColor=white)
-![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D6?logo=windowsxp&logoColor=white)
-![License](https://img.shields.io/badge/license-Apache%202.0-blue)
-![Tests](https://img.shields.io/badge/tests-51%20passing%20%2F%203%20skipped-brightgreen)
+![Platform](<https://img.shields.io/badge/platform-Windows%2010%2F11-0078D6?logo=windowsxp&logoColor=white>)
+![License](<https://img.shields.io/badge/license-Apache%202.0-blue>)
+![Tests](<https://img.shields.io/badge/tests-51%20passing%20%2F%203%20skipped-brightgreen>)
 ![Self-elevation](https://img.shields.io/badge/self--elevation-never-critical)
 
 A native PowerShell terminal CLI for Windows 10/11 storage analysis, cache
@@ -14,7 +14,7 @@ cleanup, app uninstall, and RAM diagnostics. No WSL, no extra runtime —
 just PowerShell 5.1+ (ships with Windows) or PowerShell 7+.
 
 **Contents:** [What it looks like](#what-it-looks-like) ·
-[Commands](#commands) · [How it's built](#how-its-built) ·
+[Commands](#commands) · [How it&#39;s built](#how-its-built) ·
 [Safety model](#safety-model) · [Install](#install) · [Tests](#tests) ·
 [Project layout](#project-layout) · [Status](#status)
 
@@ -32,14 +32,14 @@ polished-up approximation.
 
 ## Commands 🧰
 
-| Command | What it does |
-|---|---|
-| `winclean status` | CPU/RAM/disk snapshot, top processes by memory. `-Close <pid>` / `-Restart <pid>` act on one; `-TrimWorkingSets` is an explicit, never-implicit, marginal RAM trim. |
-| `winclean analyze` | Interactive disk browser, largest → smallest, drill-down + delete. `-Duplicates` finds exact-duplicate files by content hash (read-only). |
-| `winclean clean` | Preview known-safe rebuildable storage; `-Apply` actually cleans it. `-IncludeDisabled` also covers opt-in-only entries (Prefetch, emptying the Recycle Bin). |
-| `winclean uninstall` | List installed applications; `-Filter <text>` to search; `-Remove <index>` to uninstall one. |
-| `winclean startup` | Read-only inventory of what launches at logon (registry Run keys + Startup folders). |
-| `winclean history` | Read the JSON-lines operations log; `-Action`, `-Status`, `-Last <n>`, `-Json`. |
+| Command                | What it does                                                                                                                                                             |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `winclean status`    | CPU/RAM/disk snapshot, top processes by memory.`-Close <pid>` / `-Restart <pid>` act on one; `-TrimWorkingSets` is an explicit, never-implicit, marginal RAM trim. |
+| `winclean analyze`   | Interactive disk browser, largest → smallest, drill-down + delete.`-Duplicates` finds exact-duplicate files by content hash (read-only).                              |
+| `winclean clean`     | Preview known-safe rebuildable storage;`-Apply` actually cleans it. `-IncludeDisabled` also covers opt-in-only entries (Prefetch, emptying the Recycle Bin).         |
+| `winclean uninstall` | List installed applications;`-Filter <text>` to search; `-Remove <index>` to uninstall one.                                                                          |
+| `winclean startup`   | Read-only inventory of what launches at logon (registry Run keys + Startup folders).                                                                                     |
+| `winclean history`   | Read the JSON-lines operations log;`-Action`, `-Status`, `-Last <n>`, `-Json`.                                                                                   |
 
 ```
 winclean status                     CPU/RAM/disk snapshot, top processes by memory (high -> low)
@@ -180,10 +180,10 @@ Windows PowerShell 5.1, or PowerShell 7+.
 
 Two files make the shortcut work together:
 
-| File | Role |
-|---|---|
-| `winclean.cmd` | The thing that's actually on your `PATH` — a one-line shim: `powershell -NoProfile -ExecutionPolicy Bypass -File winclean.ps1 %*` |
-| `winclean.ps1` | The real entry point `winclean.cmd` hands off to |
+| File             | Role                                                                                                                                  |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `winclean.cmd` | The thing that's actually on your`PATH` — a one-line shim: `powershell -NoProfile -ExecutionPolicy Bypass -File winclean.ps1 %*` |
+| `winclean.ps1` | The real entry point`winclean.cmd` hands off to                                                                                     |
 
 A bare `.ps1` file isn't directly executable from `PATH` on Windows — without
 this shim you'd have to type `powershell -File C:\...\winclean.ps1` every
