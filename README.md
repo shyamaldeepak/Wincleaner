@@ -24,7 +24,7 @@ just PowerShell 5.1+ (ships with Windows) or PowerShell 7+.
 
 That image is a hand-kept SVG, not a screen recording — there's no live
 Windows box to capture a real one from (see [Status](#status): this
-project is built and tested on macOS). It's redrawn by hand whenever the
+project is built and tested on macOS-M1). It's redrawn by hand whenever the
 real output format changes, rather than left to quietly drift like a
 stale screenshot would. Every real invocation also prints a small banner
 identifying the CLI, live — so this is genuinely representative, not a
