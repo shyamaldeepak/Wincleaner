@@ -19,6 +19,7 @@ $commands = @(
     'Modules/Startup.ps1'
     'Modules/Menu.ps1'
     'Modules/Health.ps1'
+    'Modules/Trash.ps1'
 )
 
 foreach ($relativePath in ($core + $commands)) {

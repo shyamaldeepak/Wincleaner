@@ -151,6 +151,34 @@ function Show-WinCleanAnalyzeTable {
     }
 }
 
+function Get-WinCleanLargeFiles {
+    <#
+    .SYNOPSIS
+    Finds individual files under Path exceeding MinSizeMB (default 100MB),
+    sorted by size descending.
+    #>
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [int]$MinSizeMB = 100,
+        [int]$Top = 25
+    )
+
+    $minSizeBytes = [long]$MinSizeMB * 1024 * 1024
+    $files = Get-ChildItem -LiteralPath $Path -Recurse -Force -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.Length -ge $minSizeBytes } |
+        Sort-Object -Property Length -Descending |
+        Select-Object -First $Top
+
+    return @($files | ForEach-Object {
+        [PSCustomObject]@{
+            Name      = $_.Name
+            FullPath  = $_.FullName
+            SizeBytes = $_.Length
+            IsDir     = $false
+        }
+    })
+}
+
 function Invoke-WinCleanAnalyze {
     param(
         [string]$Path = (Get-Location).Path,
@@ -158,6 +186,8 @@ function Invoke-WinCleanAnalyze {
         [switch]$Json,
         [switch]$NonInteractive,
         [switch]$Duplicates,
+        [switch]$LargeFiles,
+        [int]$MinSizeMB = 100,
         [long]$MinSizeBytes = 1024
     )
 
@@ -192,6 +222,45 @@ function Invoke-WinCleanAnalyze {
         Write-Host ('  Total reclaimable: {0}' -f (Format-WinCleanBytes -Bytes ([long]$totalWasted)))
         Write-Host "  Read-only: re-run 'winclean analyze -Path <folder>' to delete a specific copy yourself."
         return
+    }
+
+    if ($LargeFiles) {
+        $largeFilesList = @(Get-WinCleanLargeFiles -Path $resolvedPath -MinSizeMB $MinSizeMB -Top $Top)
+
+        if ($Json -or $NonInteractive -or -not [Environment]::UserInteractive) {
+            if ($Json) {
+                ConvertTo-Json -InputObject $largeFilesList -Depth 3
+            } else {
+                $largeFilesList | Format-Table -Property @{ L = 'Size'; E = { Format-WinCleanBytes -Bytes $_.SizeBytes } }, Name, FullPath -AutoSize
+            }
+            return
+        }
+
+        $items = $largeFilesList
+        $selected = 0
+        while ($true) {
+            Show-WinCleanAnalyzeTable -CurrentPath "$resolvedPath (Large Files > ${MinSizeMB}MB)" -Items $items -SelectedIndex $selected
+            $key = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+
+            switch ($key.VirtualKeyCode) {
+                38 { if ($selected -gt 0) { $selected-- } }               # Up
+                40 { if ($selected -lt $items.Count - 1) { $selected++ } } # Down
+                68 {                                                        # 'd'
+                    if ($items.Count -gt 0) {
+                        $target = $items[$selected]
+                        Write-Host ''
+                        $confirm = Read-Host "Delete '$($target.FullPath)' ($(Format-WinCleanBytes -Bytes $target.SizeBytes))? Moves to Recycle Bin. [y/N]"
+                        if ($confirm -eq 'y') {
+                            Remove-WinCleanItem -Path $target.FullPath -Confirm:$false | Out-Null
+                            $items = @(Get-WinCleanLargeFiles -Path $resolvedPath -MinSizeMB $MinSizeMB -Top $Top)
+                            $selected = [math]::Min($selected, [math]::Max(0, $items.Count - 1))
+                        }
+                    }
+                }
+                81 { return }                                               # 'q'
+                27 { return }                                               # Esc
+            }
+        }
     }
 
     if ($Json -or $NonInteractive -or -not [Environment]::UserInteractive) {

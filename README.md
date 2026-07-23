@@ -6,12 +6,11 @@ PC — all from the terminal.
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-5391FE?logo=powershell&logoColor=white)
 ![Platform](<https://img.shields.io/badge/platform-Windows%2010%2F11-0078D6?logo=windowsxp&logoColor=white>)
 ![License](<https://img.shields.io/badge/license-Apache%202.0-blue>)
-![Tests](<https://img.shields.io/badge/tests-51%20passing%20%2F%203%20skipped-brightgreen>)
+![Tests](https://img.shields.io/badge/tests-57%20passing%20%2F%202%20skipped-brightgreen)
 ![Self-elevation](https://img.shields.io/badge/self--elevation-never-critical)
 
 A native PowerShell terminal CLI for Windows 10/11 storage analysis, cache
-cleanup, app uninstall, and RAM diagnostics. No WSL, no extra runtime —
-just PowerShell 5.1+ (ships with Windows) or PowerShell 7+.
+cleanup, app uninstall, and RAM diagnostics. Supports 2-letter alias `wc` and an interactive Mole-style TUI dashboard.
 
 **Contents:** [What it looks like](#what-it-looks-like) ·
 [Commands](#commands) · [How it&#39;s built](#how-its-built) ·
@@ -32,14 +31,19 @@ polished-up approximation.
 
 ## Commands 🧰
 
-| Command                | What it does                                                                                                                                                             |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `winclean status`    | CPU/RAM/disk snapshot, top processes by memory.`-Close <pid>` / `-Restart <pid>` act on one; `-TrimWorkingSets` is an explicit, never-implicit, marginal RAM trim. |
-| `winclean analyze`   | Interactive disk browser, largest → smallest, drill-down + delete.`-Duplicates` finds exact-duplicate files by content hash (read-only).                              |
-| `winclean clean`     | Preview known-safe rebuildable storage;`-Apply` actually cleans it. `-IncludeDisabled` also covers opt-in-only entries (Prefetch, emptying the Recycle Bin).         |
-| `winclean uninstall` | List installed applications;`-Filter <text>` to search; `-Remove <index>` to uninstall one.                                                                          |
-| `winclean startup`   | Read-only inventory of what launches at logon (registry Run keys + Startup folders).                                                                                     |
-| `winclean history`   | Read the JSON-lines operations log;`-Action`, `-Status`, `-Last <n>`, `-Json`.                                                                                   |
+| Command | Alias | What it does |
+|---|---|---|
+| `winclean` | `wc` | Launch Mole-style interactive dashboard menu (`1-8` hotkeys, arrow keys). |
+| `winclean status` | `wc status` | CPU/RAM/disk snapshot, top processes by memory. |
+| `winclean analyze` | `wc analyze` | Interactive disk browser, largest → smallest, drill-down + delete. |
+| `winclean analyze -LargeFiles` | `wc analyze -LargeFiles` | Scan for large files (>100MB) for fast interactive deletion. |
+| `winclean trash` | `wc trash` | Check total Recycle Bin size and item count; `-Apply` to empty safely. |
+| `winclean clean` | `wc clean` | Preview known-safe rebuildable storage; `-Apply` actually cleans it. |
+| `winclean uninstall` | `wc uninstall` | Interactive application list browser with arrow keys & uninstall action. |
+| `winclean health` | `wc health` | System Health Score (0-100), bottlenecks assessment & recommendations. |
+| `winclean optimize` | `wc optimize` | Flush DNS resolver cache and evaluate system health. |
+| `winclean startup` | `wc startup` | Read-only inventory of startup applications. |
+| `winclean history` | `wc history` | Read operations log audit trail. |
 
 ```
 winclean status                     CPU/RAM/disk snapshot, top processes by memory (high -> low)
@@ -278,3 +282,10 @@ silently printing nothing (or the literal string `"null"`) instead of `[]`
 on a legitimately-empty result. Still needs one real pass on actual
 Windows 10/11 hardware before you trust it against real data — nothing
 here has run on a real Windows Recycle Bin, registry, or Appx store yet.
+
+## Support & Author 📧
+
+- **Author & Copyright**: Copyright 2026 Shyamal Deepak
+- **Support Email**: [shyamaldeepak@gmail.com](mailto:shyamaldeepak@gmail.com)
+- **License**: Apache License 2.0 (see [LICENSE](LICENSE))
+

@@ -26,11 +26,11 @@ function Show-WinCleanMenuHeader {
 
     Write-Host ''
     Write-Host '  +-------------------------------------------------------------+' -ForegroundColor Cyan
-    Write-Host '  |   Win Clean v0.2.0 -- Interactive Dashboard                 |' -ForegroundColor Cyan
+    Write-Host '  |   Win Clean v0.3.0 -- Interactive Dashboard                 |' -ForegroundColor Cyan
     Write-Host ("  |   CPU: {0,-5} | RAM: {1,-18} | Disk C: {2,-11} |" -f $cpuStr, $ramStr, $diskStr) -ForegroundColor DarkCyan
     Write-Host '  +-------------------------------------------------------------+' -ForegroundColor DarkCyan
     Write-Host ''
-    Write-Host '  Use [Up/Down] arrows & [Enter] to select, or press [1-7] / [Q] to quit:' -ForegroundColor Gray
+    Write-Host '  Use [Up/Down] arrows & [Enter] to select, or press [1-8] / [Q] to quit:' -ForegroundColor Gray
     Write-Host ''
 }
 
@@ -38,18 +38,19 @@ function Invoke-WinCleanMenu {
     <#
     .SYNOPSIS
     Launches the interactive TUI menu loop for Win Clean.
-    Supports Up/Down arrow navigation, Enter selection, and 1-7/Q hotkeys.
+    Supports Up/Down arrow navigation, Enter selection, and 1-8/Q hotkeys.
     #>
     param()
 
     $options = @(
         @{ Key = '1'; Label = '1. System Status       (CPU, RAM, Disks, Memory Processes)'; Action = { Invoke-WinCleanStatus } }
         @{ Key = '2'; Label = '2. Analyze Disk Space  (Interactive folder size browser)';    Action = { Invoke-WinCleanAnalyze } }
-        @{ Key = '3'; Label = '3. Clean Storage       (Preview & reclaim safe caches)';      Action = { Invoke-WinCleanClean } }
-        @{ Key = '4'; Label = '4. Uninstall Software  (List & remove applications)';         Action = { Invoke-WinCleanUninstall } }
-        @{ Key = '5'; Label = '5. Startup Programs    (Logon registry & startup entries)';   Action = { Invoke-WinCleanStartup } }
-        @{ Key = '6'; Label = '6. History Log        (Past cleanup audit trail)';            Action = { Invoke-WinCleanHistory } }
-        @{ Key = '7'; Label = '7. Health & Optimize   (Health score & DNS resolver flush)';  Action = { Invoke-WinCleanHealth -FlushDns } }
+        @{ Key = '3'; Label = '3. Find Large Files    (Locate & delete large files >100MB)'; Action = { Invoke-WinCleanAnalyze -LargeFiles } }
+        @{ Key = '4'; Label = '4. Clean Storage       (Preview & reclaim safe caches)';      Action = { Invoke-WinCleanClean } }
+        @{ Key = '5'; Label = '5. Uninstall Software  (Interactive application remover)';   Action = { Invoke-WinCleanUninstall -Interactive } }
+        @{ Key = '6'; Label = '6. Recycle Bin Manager (Check size & empty Recycle Bin)';    Action = { Invoke-WinCleanTrash } }
+        @{ Key = '7'; Label = '7. Startup Programs    (Logon registry & startup entries)';   Action = { Invoke-WinCleanStartup } }
+        @{ Key = '8'; Label = '8. Health & Optimize   (Health score & DNS resolver flush)';  Action = { Invoke-WinCleanHealth -FlushDns } }
         @{ Key = 'Q'; Label = 'Q. Exit';                                                    Action = $null }
     )
 
@@ -87,7 +88,7 @@ function Invoke-WinCleanMenu {
         }
 
         Write-Host ''
-        Write-Host '  Shortcuts: [1-7] Direct Action | [Up/Down] Move | [Enter] Select | [Q/Esc] Quit' -ForegroundColor DarkGray
+        Write-Host '  Shortcuts: [1-8] Direct Action | [Up/Down] Move | [Enter] Select | [Q/Esc] Quit' -ForegroundColor DarkGray
 
         $keyInfo = $null
         try {
@@ -123,7 +124,7 @@ function Invoke-WinCleanMenu {
             break
         }
         else {
-            # Check numeric hotkeys 1-7
+            # Check numeric hotkeys 1-8
             $matchOpt = $options | Where-Object { $_.Key -eq $char }
             if ($matchOpt) {
                 if ($null -eq $matchOpt.Action) { break } # Exit

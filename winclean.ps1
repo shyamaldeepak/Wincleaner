@@ -113,7 +113,10 @@ switch ($Command.ToLowerInvariant()) {
     'history' { Invoke-WinCleanHistory @args }
     'health' { Invoke-WinCleanHealth @args }
     'optimize' { Invoke-WinCleanHealth -FlushDns }
-    'version' { Write-Host 'Win Clean 0.2.0' }
+    'trash' { Invoke-WinCleanTrash @args }
+    'recyclebin' { Invoke-WinCleanTrash @args }
+    'version' { Write-Host 'Win Clean 0.3.0' }
+    'license' { Get-Content (Join-Path $PSScriptRoot 'LICENSE') | Write-Host }
     'help' { Show-WinCleanHelp }
     default {
         Write-Error "Win Clean: unknown command '$Command'. Run 'winclean help'."

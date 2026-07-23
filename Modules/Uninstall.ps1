@@ -122,19 +122,44 @@ function Uninstall-WinCleanApp {
     }
 }
 
+function Show-WinCleanUninstallTable {
+    param(
+        [Parameter(Mandatory)][array]$Apps,
+        [int]$SelectedIndex = 0
+    )
+
+    Clear-Host
+    Write-Host 'Win Clean — installed applications' -ForegroundColor Cyan
+    Write-Host '  Up/Down move, Enter / u uninstall selected app, q quit' -ForegroundColor DarkGray
+    Write-Host ''
+
+    if ($Apps.Count -eq 0) {
+        Write-Host '  (no installed applications found)'
+        return
+    }
+
+    for ($i = 0; $i -lt $Apps.Count; $i++) {
+        $app = $Apps[$i]
+        $sizeStr = if ($app.EstimatedSizeKB) { Format-WinCleanBytes -Bytes ([long]$app.EstimatedSizeKB * 1024) } else { '' }
+        $line = ('  [{0,3}] {1,-45} {2,-20} {3}' -f ($i + 1), $app.Name, $app.Publisher, $sizeStr)
+
+        if ($i -eq $SelectedIndex) {
+            Write-Host $line -ForegroundColor Black -BackgroundColor White
+        } else {
+            Write-Host $line
+        }
+    }
+}
+
 function Invoke-WinCleanUninstall {
     param(
         [string]$Filter,
         [int]$Remove,
-        [switch]$Json
+        [switch]$Json,
+        [switch]$Interactive,
+        [switch]$NonInteractive
     )
 
-    # @(...) around the call, not just inside Get-WinCleanInstalledApps's own
-    # `return @($apps)`: a function returning zero objects still hands the
-    # caller PowerShell's internal "no pipeline output" value rather than a
-    # real empty array once it crosses the call boundary unwrapped, which
-    # made ConvertTo-Json -InputObject $apps below serialize to the literal
-    # string "null" instead of "[]" for a -Filter that matches nothing.
     $apps = @(Get-WinCleanInstalledApps -Filter $Filter)
 
     if ($PSBoundParameters.ContainsKey('Remove')) {
@@ -152,11 +177,53 @@ function Invoke-WinCleanUninstall {
     }
 
     if ($Json) {
-        # -InputObject, not piped: piping an empty array into ConvertTo-Json
-        # unrolls it to zero pipeline objects and produces NO output (not
-        # "[]"), breaking any script parsing -Json on a legitimately-empty
-        # result (e.g. a -Filter that matches nothing).
         ConvertTo-Json -InputObject $apps -Depth 3
+        return
+    }
+
+    if (-not $NonInteractive -and ($Interactive -or [Environment]::UserInteractive)) {
+        $selected = 0
+        while ($true) {
+            Show-WinCleanUninstallTable -Apps $apps -SelectedIndex $selected
+            $key = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+
+            switch ($key.VirtualKeyCode) {
+                38 { if ($selected -gt 0) { $selected-- } }               # Up
+                40 { if ($selected -lt $apps.Count - 1) { $selected++ } }  # Down
+                13 {                                                        # Enter
+                    if ($apps.Count -gt 0) {
+                        $target = $apps[$selected]
+                        Write-Host ''
+                        Write-Host "About to uninstall: $($target.Name) ($($target.Publisher))" -ForegroundColor Yellow
+                        $confirm = Read-Host 'Continue? [y/N]'
+                        if ($confirm -eq 'y') {
+                            Uninstall-WinCleanApp -App $target -Confirm:$false
+                            Write-Host 'Press any key to refresh list...' -ForegroundColor Gray
+                            $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown') | Out-Null
+                            $apps = @(Get-WinCleanInstalledApps -Filter $Filter)
+                            $selected = [math]::Min($selected, [math]::Max(0, $apps.Count - 1))
+                        }
+                    }
+                }
+                85 {                                                        # 'u'
+                    if ($apps.Count -gt 0) {
+                        $target = $apps[$selected]
+                        Write-Host ''
+                        Write-Host "About to uninstall: $($target.Name) ($($target.Publisher))" -ForegroundColor Yellow
+                        $confirm = Read-Host 'Continue? [y/N]'
+                        if ($confirm -eq 'y') {
+                            Uninstall-WinCleanApp -App $target -Confirm:$false
+                            Write-Host 'Press any key to refresh list...' -ForegroundColor Gray
+                            $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown') | Out-Null
+                            $apps = @(Get-WinCleanInstalledApps -Filter $Filter)
+                            $selected = [math]::Min($selected, [math]::Max(0, $apps.Count - 1))
+                        }
+                    }
+                }
+                81 { return }                                               # 'q'
+                27 { return }                                               # Esc
+            }
+        }
         return
     }
 
